@@ -13,7 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 # BASE_DIR ensures the script finds files relative to itself
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx")
+INPUT_FILE = os.path.join(BASE_DIR, "Links.xlsx")
 OUTPUT_FILE = os.path.join(BASE_DIR, "final_result-python.xlsx")
 
 SHEET_NAME = "Links"
