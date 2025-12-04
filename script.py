@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 # BASE_DIR ensures the script finds files relative to itself
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# NOTE: Linux is case-sensitive! Ensure your file is named exactly "Links.xlsx"
 INPUT_FILE = os.path.join(BASE_DIR, "Links.xlsx")
 OUTPUT_FILE = os.path.join(BASE_DIR, "final_result-python.xlsx")
 
@@ -21,7 +22,7 @@ COLUMN_NAME = "URL"
 
 HTTP_TIMEOUT = 10
 SELENIUM_TIMEOUT = 30
-HEADLESS = True  # MUST be True for GitHub Actions
+HEADLESS = True 
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
@@ -43,11 +44,16 @@ BAD_TITLES = [
 
 def load_urls():
     if not os.path.exists(INPUT_FILE):
-        print(f"Error: Input file '{INPUT_FILE}' not found.")
+        print(f"CRITICAL ERROR: Input file not found at: {INPUT_FILE}")
+        print("Directory contents:", os.listdir(BASE_DIR))
         return []
-    # Using openpyxl engine explicitly for compatibility
-    df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME, engine='openpyxl')
-    return df[COLUMN_NAME].dropna().astype(str).tolist()
+        
+    try:
+        df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME, engine='openpyxl')
+        return df[COLUMN_NAME].dropna().astype(str).tolist()
+    except Exception as e:
+        print(f"Error reading Excel file: {e}")
+        return []
 
 def http_check(url):
     try:
@@ -77,7 +83,7 @@ def setup_driver():
     opts.set_preference("dom.webdriver.enabled", False)
     opts.set_preference("useAutomationExtension", False)
 
-    # Selenium Manager (included in recent versions) handles the driver automatically
+    # Selenium 4 Manager automatically handles the driver executable
     driver = webdriver.Firefox(options=opts)
     driver.set_page_load_timeout(SELENIUM_TIMEOUT)
     return driver
@@ -91,7 +97,7 @@ def selenium_check(driver, url):
     try:
         WebDriverWait(driver, 10).until(lambda d: d.title and d.title.strip())
     except TimeoutException:
-        pass # Continue to check page source even if title check times out
+        pass 
 
     title = driver.title.strip() if driver.title else ""
     page = driver.page_source.lower()
@@ -107,17 +113,19 @@ def is_bad_title(title: str) -> bool:
 
 def save_results(results):
     df = pd.DataFrame(results)
-    # Save using openpyxl engine
     df.to_excel(OUTPUT_FILE, index=False, engine='openpyxl')
+    print(f"Success! Results saved to: {OUTPUT_FILE}")
 
 def main():
     print("--- Starting URL Checker ---")
+    print(f"Current Working Directory: {os.getcwd()}")
+    
     urls = load_urls()
     if not urls:
-        print("No URLs found or file missing.")
+        print("No URLs found or file missing. Exiting.")
         return
 
-    # Delete old output if exists to ensure fresh write
+    # Delete old output if exists
     if os.path.exists(OUTPUT_FILE):
         try:
             os.remove(OUTPUT_FILE)
@@ -158,7 +166,7 @@ def main():
 
     save_results(results)
     driver.quit()
-    print(f"--- Done. Saved to {OUTPUT_FILE} ---")
+    print("--- Done ---")
 
 if __name__ == "__main__":
     main()
