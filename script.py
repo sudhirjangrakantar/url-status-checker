@@ -9,20 +9,25 @@ from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import WebDriverException, TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 
-# ================= CONFIG ==================
-# BASE_DIR ensures the script finds files relative to itself
+# ================= CONFIGURATION ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# NOTE: Linux is case-sensitive! Ensure your file is named exactly "Links.xlsx"
-INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx")
-OUTPUT_FILE = os.path.join(BASE_DIR, "final_result-python.xlsx")
-
+# INPUT
+INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx") 
 SHEET_NAME = "Links"
 COLUMN_NAME = "URL"
 
+# --- NEW: DYNAMIC OUTPUT FILENAME ---
+# Define IST (Indian Standard Time)
+IST = timezone(timedelta(hours=5, minutes=30))
+# Create string like: "Result_2023-10-25_08-30.xlsx"
+current_time_str = datetime.now(IST).strftime("%Y-%m-%d_%H-%M")
+OUTPUT_FILE = os.path.join(BASE_DIR, f"Result_{current_time_str}.xlsx")
+# ------------------------------------
+
 HTTP_TIMEOUT = 10
 SELENIUM_TIMEOUT = 30
-HEADLESS = True 
+HEADLESS = True
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
@@ -40,14 +45,12 @@ CF_SIGNS = [
 BAD_TITLES = [
     "404 Not Found", "Access to the website is blocked"
 ]
-# ===========================================
+# ==================================================
 
 def load_urls():
     if not os.path.exists(INPUT_FILE):
         print(f"CRITICAL ERROR: Input file not found at: {INPUT_FILE}")
-        print("Directory contents:", os.listdir(BASE_DIR))
         return []
-        
     try:
         df = pd.read_excel(INPUT_FILE, sheet_name=SHEET_NAME, engine='openpyxl')
         return df[COLUMN_NAME].dropna().astype(str).tolist()
@@ -74,16 +77,12 @@ def setup_driver():
     opts = Options()
     if HEADLESS:
         opts.add_argument("--headless")
-    
-    # Critical settings for GitHub Actions (Linux)
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    
     opts.set_preference("dom.webdriver.enabled", False)
     opts.set_preference("useAutomationExtension", False)
 
-    # Selenium 4 Manager automatically handles the driver executable
     driver = webdriver.Firefox(options=opts)
     driver.set_page_load_timeout(SELENIUM_TIMEOUT)
     return driver
@@ -112,25 +111,19 @@ def is_bad_title(title: str) -> bool:
     return any(bad.lower() in title.lower() for bad in BAD_TITLES)
 
 def save_results(results):
+    if not results:
+        print("No results to save.")
+        return
     df = pd.DataFrame(results)
     df.to_excel(OUTPUT_FILE, index=False, engine='openpyxl')
-    print(f"Success! Results saved to: {OUTPUT_FILE}")
+    print(f"✓ Success! Saved to {OUTPUT_FILE}")
 
 def main():
     print("--- Starting URL Checker ---")
-    print(f"Current Working Directory: {os.getcwd()}")
-    
     urls = load_urls()
     if not urls:
-        print("No URLs found or file missing. Exiting.")
+        print("No URLs loaded. Exiting.")
         return
-
-    # Delete old output if exists
-    if os.path.exists(OUTPUT_FILE):
-        try:
-            os.remove(OUTPUT_FILE)
-        except Exception:
-            pass
 
     driver = setup_driver()
     results = []
@@ -139,7 +132,6 @@ def main():
     for i, url in enumerate(urls, start=1):
         print(f"[{i}/{total}] Checking: {url}")
         start_time = time.time()
-        
         IST = timezone(timedelta(hours=5, minutes=30))
         timestamp = datetime.now(IST).isoformat(timespec="seconds")
 

@@ -5,7 +5,6 @@ on:
     - cron: '0 8 * * *'
   workflow_dispatch:
 
-# --- IMPORTANT: THIS GIVES PERMISSION TO PUSH ---
 permissions:
   contents: write
 
@@ -30,7 +29,6 @@ jobs:
         run: python script.py
 
       - name: Debug - List Files
-        # This will show us if the file was created or not
         run: ls -R
 
       - name: Commit and Push Results
@@ -38,17 +36,13 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # We check if the file exists before trying to add it
-          if [ -f "final_result-python.xlsx" ]; then
-            git add final_result-python.xlsx
-            git commit -m "Update results" || echo "No changes to commit"
-            git push
+          # Use wildcard (*) to add ANY Excel file that starts with Result_
+          git add Result_*.xlsx
+          
+          # Only commit if there are new files
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
           else
-            echo "---------------------------------------------------"
-            echo "WARNING: final_result-python.xlsx was not generated."
-            echo "This usually means Links.xlsx was missing or empty."
-            echo "Check the logs of the 'Run Script' step above."
-            echo "---------------------------------------------------"
-            # We exit successfully so the Action doesn't turn Red, but no file is pushed.
-            exit 0
+            git commit -m "Add daily report"
+            git push
           fi
