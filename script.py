@@ -14,7 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # NOTE: Linux is case-sensitive! Ensure your file is named exactly "Links.xlsx"
-INPUT_FILE = os.path.join(BASE_DIR, "Links.xlsx")
+INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx")
 OUTPUT_FILE = os.path.join(BASE_DIR, "final_result-python.xlsx")
 
 SHEET_NAME = "Links"
