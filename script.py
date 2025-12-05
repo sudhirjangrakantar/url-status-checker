@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import time
 import requests
@@ -13,21 +14,20 @@ from selenium.webdriver.support.ui import WebDriverWait
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # INPUT
-INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx") 
+INPUT_FILE = os.path.join(BASE_DIR, "links.xlsx")
 SHEET_NAME = "Links"
 COLUMN_NAME = "URL"
 
-# --- NEW: DYNAMIC OUTPUT FILENAME ---
-# Define IST (Indian Standard Time)
+# --- DYNAMIC OUTPUT FILENAME ---
 IST = timezone(timedelta(hours=5, minutes=30))
-# Create string like: "Result_2023-10-25_08-30.xlsx"
 current_time_str = datetime.now(IST).strftime("%Y-%m-%d_%H-%M")
 OUTPUT_FILE = os.path.join(BASE_DIR, f"Result_{current_time_str}.xlsx")
 # ------------------------------------
 
-HTTP_TIMEOUT = 10
+HTTP_TIMEOUT = 10         # slightly higher to tolerate remote delays
 SELENIUM_TIMEOUT = 30
-HEADLESS = True
+# Use env var HEADLESS="true" or "false" to override (good for GitHub Actions)
+HEADLESS = os.getenv("HEADLESS", "true").lower() in ("1", "true", "yes")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
@@ -60,55 +60,72 @@ def load_urls():
 
 def http_check(url):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
+        r = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT, allow_redirects=True)
         soup = BeautifulSoup(r.text, "html.parser")
         title = soup.title.text.strip() if soup.title else ""
         return r.status_code, title
-    except Exception:
+    except Exception as e:
+        # debug output
+        print(f"  - HTTP request failed: {e}")
         return None, ""
 
 def need_selenium(status, title):
-    if status is None or status >= 400: return True
-    if not title: return True
-    if any(x in title.lower() for x in CF_SIGNS): return True
+    if status is None or status >= 400: 
+        return True
+    if not title:
+        return True
+    if any(x in title.lower() for x in CF_SIGNS):
+        return True
     return False
 
 def setup_driver():
     opts = Options()
     if HEADLESS:
         opts.add_argument("--headless")
+    # Helpful in CI
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
+    # Try to reduce webdriver detection
     opts.set_preference("dom.webdriver.enabled", False)
     opts.set_preference("useAutomationExtension", False)
 
     driver = webdriver.Firefox(options=opts)
     driver.set_page_load_timeout(SELENIUM_TIMEOUT)
+    # implicit wait gives a little grace for JS-rendered titles
+    driver.implicitly_wait(3)
     return driver
 
 def selenium_check(driver, url):
     try:
         driver.get(url)
+        # short pause to let JS start executing (helps headless)
+        time.sleep(1.5)
     except WebDriverException as e:
-        return "Inactive", f"Selenium error: {str(e)[:80]}"
+        return "Inactive", f"Selenium error: {str(e)[:200]}"
 
+    # Wait only until title is available (same behavior as your original script)
     try:
         WebDriverWait(driver, 10).until(lambda d: d.title and d.title.strip())
     except TimeoutException:
-        pass 
+        # MATCHES ORIGINAL: return explicit No title found
+        return "Active", "No title found"
 
     title = driver.title.strip() if driver.title else ""
-    page = driver.page_source.lower()
+    page = driver.page_source.lower() if driver.page_source else ""
 
+    # Quick Cloudflare check
     if any(x in page for x in CF_SIGNS) and not title:
+        print("  - Security challenge immediately → skipping")
         return "Active", title or "Blocked by Cloudflare"
 
     return "Active", title
 
 def is_bad_title(title: str) -> bool:
-    if not title: return False
-    return any(bad.lower() in title.lower() for bad in BAD_TITLES)
+    if not title: 
+        return False
+    title_lower = title.lower()
+    return any(bad.lower() in title_lower for bad in BAD_TITLES)
 
 def save_results(results):
     if not results:
@@ -143,9 +160,12 @@ def main():
             status = "Active"
 
         if is_bad_title(title):
+            print(f"  ! Detected Blocked Title: '{title}' -> Marking Inactive")
             status = "Inactive"
 
         duration = round(time.time() - start_time, 2)
+
+        print(f"  → {status} | HTTP: {http_code} | Title: {title[:80]} | Time: {duration}s")
         
         results.append({
             "URL": url,
