@@ -40,4 +40,4 @@ jobs:
         env:
           HEADLESS: "true"
         run: |
-          python your_script_name.py
+          python script.py
