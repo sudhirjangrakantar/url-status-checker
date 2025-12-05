@@ -82,19 +82,22 @@ def setup_driver():
     opts = Options()
     if HEADLESS:
         opts.add_argument("--headless")
-    # Helpful in CI
+
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
-    # Try to reduce webdriver detection
+
     opts.set_preference("dom.webdriver.enabled", False)
     opts.set_preference("useAutomationExtension", False)
 
+    # IMPORTANT: For GitHub Actions
+    opts.binary_location = "/usr/bin/firefox-esr"
+
     driver = webdriver.Firefox(options=opts)
     driver.set_page_load_timeout(SELENIUM_TIMEOUT)
-    # implicit wait gives a little grace for JS-rendered titles
     driver.implicitly_wait(3)
     return driver
+
 
 def selenium_check(driver, url):
     try:
